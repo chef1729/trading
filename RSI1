@@ -1,0 +1,60 @@
+//@version=5
+indicator("RSI + ATR Long & Short Strategy with News Filter + Backgrounds", overlay=true)
+
+// === INPUTS ===
+rsiLength = input.int(14, title="RSI Length")
+longEntryThreshold = input.int(25, title="Long Entry RSI Threshold")
+longExitThreshold = input.int(80, title="Long Exit RSI Threshold")
+shortEntryThreshold = input.int(75, title="Short Entry RSI Threshold")
+shortExitThreshold = input.int(25, title="Short Exit RSI Threshold")
+atrMin = input.float(50, title="Minimum Daily ATR")
+
+// === News Filter Manual Override ===
+enableNewsFilter = input.bool(true, title="Enable News-Based Risk Filter?")
+marketCondition = input.string("ON", title="Market Bias (ON = Risk-On, OFF = Risk-Off)", options=["ON", "OFF"])
+newsOK = not enableNewsFilter or (marketCondition == "ON")
+
+// === RSI Calculation (Current TF)
+rsi = ta.rsi(close, rsiLength)
+
+// === Volatility Filter using Daily ATR
+dailyATR = request.security(syminfo.tickerid, "D", ta.atr(14))
+volatilityOK = dailyATR > atrMin
+
+// === Long Entry and Exit Conditions ===
+longEntry = rsi < longEntryThreshold and volatilityOK and newsOK
+longExit = rsi > longExitThreshold
+
+// === Short Entry and Exit Conditions ===
+shortEntry = rsi > shortEntryThreshold and volatilityOK and newsOK
+shortExit = rsi < shortExitThreshold
+
+// === Plot Buy and Sell Signals ===
+plotshape(longEntry, title="Buy Signal", location=location.belowbar, color=color.green, style=shape.labelup, size=size.large, text="BUY")
+plotshape(longExit, title="Exit Long", location=location.abovebar, color=color.red, style=shape.labeldown, size=size.large, text="EXIT")
+
+plotshape(shortEntry, title="Short Signal", location=location.abovebar, color=color.orange, style=shape.labeldown, size=size.large, text="SHORT")
+plotshape(shortExit, title="Exit Short", location=location.belowbar, color=color.blue, style=shape.labelup, size=size.large, text="COVER")
+
+// === Background Colors ===
+bgcolor(longEntry ? color.new(color.green, 85) : na)
+bgcolor(longExit ? color.new(color.red, 85) : na)
+bgcolor(shortEntry ? color.new(color.orange, 85) : na)
+bgcolor(shortExit ? color.new(color.blue, 85) : na)
+
+// === Chart Labels for Explanation ===
+if longEntry
+    label.new(bar_index, low, "Long Entry: RSI = " + str.tostring(rsi, '#.##') + "\nATR OK + News OK", yloc=yloc.belowbar, style=label.style_label_up, color=color.green, textcolor=color.white)
+if longExit
+    label.new(bar_index, high, "Long Exit: RSI = " + str.tostring(rsi, '#.##'), yloc=yloc.abovebar, style=label.style_label_down, color=color.red, textcolor=color.white)
+
+if shortEntry
+    label.new(bar_index, high, "Short Entry: RSI = " + str.tostring(rsi, '#.##') + "\nATR OK + News OK", yloc=yloc.abovebar, style=label.style_label_down, color=color.orange, textcolor=color.white)
+if shortExit
+    label.new(bar_index, low, "Short Exit: RSI = " + str.tostring(rsi, '#.##'), yloc=yloc.belowbar, style=label.style_label_up, color=color.blue, textcolor=color.white)
+
+// === Alerts ===
+alertcondition(longEntry, title="Long Entry Alert", message="RSI below long entry threshold, ATR OK, News OK")
+alertcondition(longExit, title="Long Exit Alert", message="RSI above long exit threshold")
+alertcondition(shortEntry, title="Short Entry Alert", message="RSI above short entry threshold, ATR OK, News OK")
+alertcondition(shortExit, title="Short Exit Alert", message="RSI below short exit threshold")
