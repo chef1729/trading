@@ -1,0 +1,55 @@
+//@version=5
+indicator("🔄 RSI Extreme + All Candle Reversals", overlay=true)
+
+// === INPUTS ===
+rsiLength = input.int(14, "RSI Length")
+longEntryRSI = input.int(30, "Long Entry RSI Threshold (Oversold)")
+shortEntryRSI = input.int(70, "Short Entry RSI Threshold (Overbought)")
+
+// === RSI Calculation ===
+rsi = ta.rsi(close, rsiLength)
+
+// === Candle Patterns ===
+bullEngulf = (close > open) and (close[1] < open[1]) and (close > open[1]) and (open < close[1])
+bearEngulf = (close < open) and (close[1] > open[1]) and (open > close[1]) and (close < open[1])
+
+hammer = ((open - low) > 2 * (close - open)) and ((high - close) < (close - open))
+shootingStar = ((high - open) > 2 * (open - close)) and ((close - low) < (open - close))
+
+piercingLine = (close > (open[1] + close[1])/2) and (close[1] < open[1]) and (open < close[1])
+darkCloudCover = (close < (open[1] + close[1])/2) and (close[1] > open[1]) and (open > close[1])
+
+doji = math.abs(close - open) <= (high - low) * 0.1
+
+morningStar = (close[2] < open[2]) and (math.abs(close[1]-open[1])<(high[1]-low[1])*0.3) and (close > open and close > (open[2] + close[2])/2)
+eveningStar = (close[2] > open[2]) and (math.abs(close[1]-open[1])<(high[1]-low[1])*0.3) and (close < open and close < (open[2] + close[2])/2)
+
+// Combine Bullish and Bearish Patterns
+bullishPattern = bullEngulf or hammer or piercingLine or doji or morningStar
+bearishPattern = bearEngulf or shootingStar or darkCloudCover or doji or eveningStar
+
+// === Entry Logic ===
+longEntry = (rsi < longEntryRSI) and bullishPattern
+shortEntry = (rsi > shortEntryRSI) and bearishPattern
+
+// === Plot Shapes ===
+plotshape(longEntry, title="LONG Entry", location=location.belowbar, color=color.green, style=shape.labelup, size=size.large, text="LONG 🚀")
+plotshape(shortEntry, title="SHORT Entry", location=location.abovebar, color=color.red, style=shape.labeldown, size=size.large, text="SHORT 🔻")
+
+// === Background Colors ===
+bgcolor(longEntry ? color.new(color.green, 90) : shortEntry ? color.new(color.red, 90) : na)
+
+// === Alert Conditions ===
+alertcondition(longEntry, "Long Entry", "🔵 Long Entry: RSI Oversold + Bullish Reversal Pattern Detected")
+alertcondition(shortEntry, "Short Entry", "🔴 Short Entry: RSI Overbought + Bearish Reversal Pattern Detected")
+
+// === Information Panel ===
+var label infoLabel = na
+if (bar_index % 10 == 0)
+    label.delete(infoLabel)
+    infoText = 
+      "🔄 RSI + Reversal Patterns\n" +
+      "RSI: " + str.tostring(rsi, "#.##") + "\n" +
+      "Bullish Patterns: " + (bullishPattern ? "✅ Yes" : "❌ No") + "\n" +
+      "Bearish Patterns: " + (bearishPattern ? "✅ Yes" : "❌ No")
+    infoLabel := label.new(bar_index, high, infoText, style=label.style_label_left, color=color.gray, textcolor=color.white, size=size.small)
