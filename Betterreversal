@@ -1,0 +1,62 @@
+//@version=5
+indicator("🔁 RSI + Pivot Reversal Strategy (Annotated)", overlay=true)
+
+// === INPUTS ===
+rsiLength = input.int(14, title="RSI Length")
+entryLongRSI = input.int(25, title="RSI Long Entry Threshold")
+exitLongRSI  = input.int(75, title="RSI Long Exit Threshold")
+entryShortRSI = input.int(75, title="RSI Short Entry Threshold")
+exitShortRSI  = input.int(25, title="RSI Short Exit Threshold")
+pivotTolerance = input.float(20, title="Pivot Proximity (Points)")
+
+// === DAILY PIVOTS ===
+getPivotLevels() =>
+    pivot = request.security(syminfo.tickerid, "D", (high + low + close)/3)
+    s1 = request.security(syminfo.tickerid, "D", pivot - (high - low))
+    s2 = request.security(syminfo.tickerid, "D", pivot - 2 * (high - low))
+    s3 = request.security(syminfo.tickerid, "D", pivot - 3 * (high - low))
+    r1 = request.security(syminfo.tickerid, "D", pivot + (high - low))
+    r2 = request.security(syminfo.tickerid, "D", pivot + 2 * (high - low))
+    r3 = request.security(syminfo.tickerid, "D", pivot + 3 * (high - low))
+    [pivot, s1, s2, s3, r1, r2, r3]
+
+[pivot, s1, s2, s3, r1, r2, r3] = getPivotLevels()
+
+// === RSI ===
+rsi = ta.rsi(close, rsiLength)
+
+// === Proximity Check ===
+isNear(val) => math.abs(close - val) <= pivotTolerance
+nearSupport = isNear(s1) or isNear(s2) or isNear(s3)
+nearResistance = isNear(r1) or isNear(r2) or isNear(r3)
+
+// === Signal Logic ===
+longEntry = rsi < entryLongRSI and nearSupport
+longExit = rsi > exitLongRSI
+shortEntry = rsi > entryShortRSI and nearResistance
+shortExit = rsi < exitShortRSI
+
+// === Plot Arrows ===
+plotshape(longEntry, title="Long Entry", location=location.belowbar, color=color.green, style=shape.arrowup, size=size.large)
+plotshape(longExit, title="Exit Long", location=location.abovebar, color=color.red, style=shape.arrowdown, size=size.large)
+plotshape(shortEntry, title="Short Entry", location=location.abovebar, color=color.orange, style=shape.arrowdown, size=size.large)
+plotshape(shortExit, title="Exit Short", location=location.belowbar, color=color.blue, style=shape.arrowup, size=size.large)
+
+// === Labels ===
+if longEntry
+    label.new(bar_index, low, "🟢 Long Entry\nRSI: " + str.tostring(rsi, "#.##"), style=label.style_label_up, yloc=yloc.belowbar, color=color.green, textcolor=color.white)
+
+if longExit
+    label.new(bar_index, high, "🔴 Exit Long\nRSI: " + str.tostring(rsi, "#.##"), style=label.style_label_down, yloc=yloc.abovebar, color=color.red, textcolor=color.white)
+
+if shortEntry
+    label.new(bar_index, high, "🟠 Short Entry\nRSI: " + str.tostring(rsi, "#.##"), style=label.style_label_down, yloc=yloc.abovebar, color=color.orange, textcolor=color.white)
+
+if shortExit
+    label.new(bar_index, low, "🔵 Exit Short\nRSI: " + str.tostring(rsi, "#.##"), style=label.style_label_up, yloc=yloc.belowbar, color=color.blue, textcolor=color.white)
+
+// === Alerts ===
+alertcondition(longEntry, title="Long Entry Alert", message="Long entry: RSI < 25 and near S1/S2/S3")
+alertcondition(longExit, title="Long Exit Alert", message="Exit long: RSI > 75")
+alertcondition(shortEntry, title="Short Entry Alert", message="Short entry: RSI > 75 and near R1/R2/R3")
+alertcondition(shortExit, title="Short Exit Alert", message="Exit short: RSI < 25")
