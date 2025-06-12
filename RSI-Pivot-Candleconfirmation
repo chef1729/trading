@@ -1,0 +1,74 @@
+//@version=5
+indicator("🔁 RSI + Pivot + Candlestick Reversal Strategy", overlay=true)
+
+// === INPUTS ===
+rsiLength      = input.int(14, title="RSI Length")
+entryLongRSI   = input.int(30, title="RSI Long Entry / Short Exit Threshold")
+entryShortRSI  = input.int(70, title="RSI Short Entry / Long Exit Threshold")
+pivotTolerance = input.float(20, title="Pivot Proximity (Points)")
+
+// === DAILY PIVOTS ===
+getPivotLevels() =>
+    pivot = request.security(syminfo.tickerid, "D", (high + low + close)/3)
+    s1    = request.security(syminfo.tickerid, "D", pivot - (high - low))
+    s2    = request.security(syminfo.tickerid, "D", pivot - 2 * (high - low))
+    s3    = request.security(syminfo.tickerid, "D", pivot - 3 * (high - low))
+    r1    = request.security(syminfo.tickerid, "D", pivot + (high - low))
+    r2    = request.security(syminfo.tickerid, "D", pivot + 2 * (high - low))
+    r3    = request.security(syminfo.tickerid, "D", pivot + 3 * (high - low))
+    [pivot, s1, s2, s3, r1, r2, r3]
+
+[pivot, s1, s2, s3, r1, r2, r3] = getPivotLevels()
+
+// === RSI ===
+rsi = ta.rsi(close, rsiLength)
+
+// === Proximity Check ===
+isNear(val) => math.abs(close - val) <= pivotTolerance
+nearSupport = isNear(s1) or isNear(s2) or isNear(s3)
+nearResistance = isNear(r1) or isNear(r2) or isNear(r3)
+
+// === Bullish Candlestick Patterns (Bottom) ===
+bullEngulf = close > open and close[1] < open[1] and close > open[1] and open < close[1]
+hammer = (open - low) > 2 * math.abs(close - open) and (high - close) < math.abs(close - open)
+piercing = close > (open[1] + close[1]) / 2 and close[1] < open[1] and open < close[1]
+doji = math.abs(close - open) <= (high - low) * 0.1
+morningStar = close[2] < open[2] and math.abs(close[1] - open[1]) < (high[1] - low[1]) * 0.3 and close > open and close > (open[2] + close[2]) / 2
+
+bullPattern = bullEngulf or hammer or piercing or doji or morningStar
+
+// === Bearish Candlestick Patterns (Top) ===
+bearEngulf = close < open and close[1] > open[1] and open > close[1] and close < open[1]
+shootingStar = (high - open) > 2 * math.abs(open - close) and (close - low) < math.abs(open - close)
+darkCloud = close < (open[1] + close[1]) / 2 and close[1] > open[1] and open > close[1]
+eveningStar = close[2] > open[2] and math.abs(close[1] - open[1]) < (high[1] - low[1]) * 0.3 and close < open and close < (open[2] + close[2]) / 2
+
+bearPattern = bearEngulf or shootingStar or darkCloud or doji or eveningStar
+
+// === Signal Logic (add pattern confirmation) ===
+longEntry  = rsi < entryLongRSI  and nearSupport    and bullPattern
+longExit   = rsi > entryShortRSI and nearResistance and bearPattern
+shortEntry = rsi > entryShortRSI and nearResistance and bearPattern
+shortExit  = rsi < entryLongRSI  and nearSupport    and bullPattern
+
+// === Plot Arrows ===
+plotshape(longEntry,  title="Long Entry",  location=location.belowbar, color=color.green,  style=shape.arrowup,   size=size.large, text="BUY")
+plotshape(longExit,   title="Long Exit / Short Entry", location=location.abovebar, color=color.red,    style=shape.arrowdown, size=size.large, text="SELL")
+plotshape(shortEntry, title="Short Entry", location=location.abovebar, color=color.orange, style=shape.arrowdown, size=size.large, text="SHORT")
+plotshape(shortExit,  title="Short Exit / Long Entry",  location=location.belowbar, color=color.blue,   style=shape.arrowup,   size=size.large, text="COVER")
+
+// === Labels (Self-Explanatory) ===
+if longEntry
+    label.new(bar_index, low, "🟢 Long Entry\nRSI: " + str.tostring(rsi, "#.##") + "\nNear S1/S2/S3\nBullish Candle", style=label.style_label_up, yloc=yloc.belowbar, color=color.green, textcolor=color.white)
+if longExit
+    label.new(bar_index, high, "🔴 Long Exit / Short Entry\nRSI: " + str.tostring(rsi, "#.##") + "\nNear R1/R2/R3\nBearish Candle", style=label.style_label_down, yloc=yloc.abovebar, color=color.red, textcolor=color.white)
+if shortEntry
+    label.new(bar_index, high, "🟠 Short Entry\nRSI: " + str.tostring(rsi, "#.##") + "\nNear R1/R2/R3\nBearish Candle", style=label.style_label_down, yloc=yloc.abovebar, color=color.orange, textcolor=color.white)
+if shortExit
+    label.new(bar_index, low, "🔵 Short Exit / Long Entry\nRSI: " + str.tostring(rsi, "#.##") + "\nNear S1/S2/S3\nBullish Candle", style=label.style_label_up, yloc=yloc.belowbar, color=color.blue, textcolor=color.white)
+
+// === Alerts ===
+alertcondition(longEntry,  title="Long Entry Alert",         message="Long entry: RSI < 30, S1/S2/S3, bullish candle")
+alertcondition(longExit,   title="Long Exit/Short Entry Alert", message="Long exit & Short entry: RSI > 70, R1/R2/R3, bearish candle")
+alertcondition(shortEntry, title="Short Entry Alert",        message="Short entry: RSI > 70, R1/R2/R3, bearish candle")
+alertcondition(shortExit,  title="Short Exit/Long Entry Alert", message="Short exit & Long entry: RSI < 30, S1/S2/S3, bullish candle")
